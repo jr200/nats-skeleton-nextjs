@@ -1,0 +1,47 @@
+name: build-helm-chart
+
+on:
+  repository_dispatch:
+    types:
+      - dispatch-build-helm-chart
+
+  workflow_dispatch:
+    inputs:
+      chart_repo:
+        description: 'charts repo'
+        required: true
+        type: string
+        default: jr200/helm-charts-private
+      chart_dir:
+        description: 'charts folder'
+        required: true
+        type: string
+        default: charts
+
+jobs:
+  configure:
+    uses: jr200/github-action-templates/.github/workflows/preconfigure.yml@main
+    with:
+      event_name: ${{ toJson(github.event_name) }}
+      event: ${{ toJson(github.event) }}
+
+  main:
+    needs: configure
+    uses: jr200/github-action-templates/.github/workflows/build_helm_chart.yml@main
+    with:
+      chart_repo: ${{ fromJson(needs.configure.outputs.context).chart_repo }}
+      chart_dir: ${{ fromJson(needs.configure.outputs.context).chart_dir }}
+    secrets:
+      charts_write_token: ${{ secrets.CHARTS_WRITE_TOKEN }}
+
+  spawn-workflow:
+    needs: main
+    runs-on: ubuntu-latest
+    steps:
+      - name: dispatch-next-workflow
+        uses: peter-evans/repository-dispatch@v3
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: dispatch-publish-release
+          client-payload: ${{ toJson(github.event.client_payload) }}

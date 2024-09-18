@@ -1,0 +1,51 @@
+name: build-docker-image
+
+on:
+  repository_dispatch:
+    types:
+      - dispatch-build-docker-image
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: docker-image-tag
+        required: false
+        type: string
+        default: dev
+      platforms:
+        description: platform-filter-json
+        required: false
+        type: string
+        default: |-
+          [ "linux/amd64" ]
+
+jobs:
+  configure:
+    uses: jr200/github-action-templates/.github/workflows/preconfigure.yml@main
+    with:
+      event_name: ${{ toJson(github.event_name) }}
+      event: ${{ toJson(github.event) }}
+
+  main:
+    needs: configure
+    uses: jr200/github-action-templates/.github/workflows/build_docker_image_multiplatform.yml@main
+    with:
+      registry_name: ghcr.io
+      image_name: ${{ github.repository }}
+      tag: ${{ fromJson(needs.configure.outputs.context).tag }}
+      platforms: ${{ fromJson(needs.configure.outputs.context).platforms }}
+    secrets:
+      registry_username: ${{ github.actor }}
+      registry_token: ${{ secrets.GITHUB_TOKEN }}
+
+  spawn-workflow:
+    needs: main
+    runs-on: ubuntu-latest
+    steps:
+      - name: dispatch-next-workflow
+        uses: peter-evans/repository-dispatch@v3
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          event-type: dispatch-build-helm-chart
+          token: ${{ secrets.GITHUB_TOKEN }}
+          client-payload: ${{ toJson(github.event.client_payload) }}

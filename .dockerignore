@@ -1,0 +1,16 @@
+.dockerignore
+.env
+.env*
+.git
+.github
+.history
+.next
+*.bak
+*.swp
+charts
+Dockerfile
+Makefile
+node_modules
+npm-debug.log
+private
+README*.md

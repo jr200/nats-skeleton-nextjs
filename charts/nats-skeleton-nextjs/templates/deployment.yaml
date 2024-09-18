@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nats-skeleton-nextjs.fullname" . }}
+  labels:
+    {{- include "nats-skeleton-nextjs.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "nats-skeleton-nextjs.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- if .Values.vault.enabled }}
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-configmap: {{ include "nats-skeleton-nextjs.fullname" . }}-vault-agent
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/agent-init-first: "true"
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "nats-skeleton-nextjs.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "nats-skeleton-nextjs.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: NEXT_TELEMETRY_DISABLED
+              value: "1"
+            - name: NODE_TLS_REJECT_UNAUTHORIZED
+              value: "0"
+            - name: APP_BASE_URL
+              value: {{ .Values.config.url | quote }}
+            - name: NEXTAUTH_URL
+              value: {{ .Values.config.url | quote }}
+            - name: NEXTAUTH_SECRET
+              value: {{ .Values.config.authIdp.secret | default (include "nats-skeleton-nextjs.randomString32b64" . ) | quote }}
+            - name: AUTH_TRUST_HOST
+              value: "true"
+            - name: AUTH_ZITADEL_ISSUER
+              value: {{ .Values.config.authIdp.issuer  | quote }}
+            - name: AUTH_ZITADEL_ID
+              value: {{ .Values.config.authIdp.clientId  | quote }}
+            - name: AUTH_ZITADEL_SECRET
+              value: {{ .Values.config.authIdp.clientSecret  | quote }}
+            - name: NATS_ENDPOINT
+              value: {{ .Values.config.nats.uri  | quote }}
+          {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.devDebug }}
+          command:
+            - sleep
+          args:
+          - infinity
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 20
+            timeoutSeconds: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+              scheme: HTTP
+            initialDelaySeconds: 5
+            timeoutSeconds: 2
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

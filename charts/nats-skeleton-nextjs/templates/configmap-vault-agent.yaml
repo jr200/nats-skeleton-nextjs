@@ -1,0 +1,33 @@
+{{- if .Values.vault.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nats-skeleton-nextjs.fullname" . }}-vault-agent
+  labels: {{- include "nats-skeleton-nextjs.labels" . | nindent 4 }}
+data:
+  config-init.hcl: |
+    "auto_auth" = {
+      "method" = {
+        "config" = {
+          "role" = "{{ .Values.vault.nobodyReaderRole }}"
+        }
+        "type" = "kubernetes"
+        "mount_path" = "{{ .Values.vault.authMount }}"
+      }
+    }
+
+    exit_after_auth = true
+    pid_file = "/home/vault/.pid"
+
+    template = {
+      destination = "/vault/secrets/environment"
+      left_delimiter = "[["
+      right_delimiter = "]]"
+      contents = <<EOT
+      [[- with secret "{{ $.Values.vault.nobodyAccount }}" -]]
+      export NATS_NOBODY_CREDS_B64=[[ .Data.creds | base64Encode ]]
+      [[- end -]]
+      EOT
+    }
+
+{{- end }}
